@@ -1,0 +1,14 @@
+const args = process.argv.slice(2);
+if (args[0] !== '--url' || args.length < 4) throw Error('用法：chat-task.mjs --url URL take|complete|fail TASK [result.json]');
+const [, address, action, id, resultFile] = args;
+const url = new URL(address);
+if (url.protocol !== 'http:' || !['127.0.0.1','localhost','[::1]'].includes(url.hostname) || url.username || url.password) throw Error('只支持本机工作台地址。');
+if (!['take','complete','fail'].includes(action) || !/^[a-f0-9-]{36}$/.test(id)) throw Error('任务操作无效。');
+const threadId = process.env.CODEX_THREAD_ID;
+if (!threadId) throw Error('必须从当前 Codex 聊天运行。');
+const session = await fetch(`${url.origin}/api/diary/session`).then(r => r.json());
+const response = await fetch(`${url.origin}/api/diary/jobs/${id}/chat/${action}`, { method:'POST', headers:{'Content-Type':'application/json','X-Diary-Token':session.token}, body:JSON.stringify({threadId,resultFile}) });
+const result = await response.json();
+if (!response.ok) throw Error(result.error);
+console.log(JSON.stringify({id:result.id,date:result.date,status:result.status,message:result.message,posterUrl:result.posterUrl}));
+if (action === 'complete' && result.status === 'failed') process.exitCode = 1;

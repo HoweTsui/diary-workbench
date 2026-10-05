@@ -1,0 +1,60 @@
+{
+  "atlas": {
+    "src": "character-lineup.png",
+    "cols": 2,
+    "rows": 1
+  },
+  "nodes": [
+    {
+      "id": "actual-person-01",
+      "name": "实际人物一",
+      "role": "本次任务中的实际身份",
+      "col": 0,
+      "row": 0,
+      "avatarSrc": "avatars/person-01.png",
+      "x": -160,
+      "y": 0,
+      "anchors": [
+        "25-35度偏正半侧面与双正圆豆豆眼，鼻尖横向朝左或右且禁止正面对镜头",
+        "实际脸型、短弧后空白断口与人类开放线描鼻",
+        "实际低位嘴与发型或配饰（眼镜框、镜桥和镜腿若出现，线宽与主体一致）",
+        "肢体与身体尺寸使用references/geometry.json中该物种的canonical目标；动作不改变杆宽和段长，保留衣物与鞋爪轮廓"
+      ],
+      "notes": []
+      ,
+      "profile": {
+        "approval": "draft",
+        "appearance": [
+          "填写已确认的发型、衣着和固定配饰"
+        ],
+        "firstAppearance": "填写首次出现的日记"
+      }
+    },
+    {
+      "id": "actual-person-02",
+      "name": "实际人物二",
+      "role": "本次任务中的实际身份",
+      "col": 1,
+      "row": 0,
+      "avatarSrc": "avatars/person-02.png",
+      "x": 160,
+      "y": 0,
+      "anchors": [
+        "25-35度偏正半侧面与双正圆豆豆眼，鼻尖横向朝左或右且禁止正面对镜头",
+        "实际脸型、短弧后空白断口与人类开放线描鼻",
+        "实际低位嘴与发型或配饰（眼镜框、镜桥和镜腿若出现，线宽与主体一致）",
+        "肢体与身体尺寸使用references/geometry.json中该物种的canonical目标；动作不改变杆宽和段长，保留衣物与鞋爪轮廓"
+      ],
+      "notes": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "actual-person-01",
+      "target": "actual-person-02",
+      "label": "实际关系",
+      "type": "friend",
+      "curve": 0
+    }
+  ]
+}

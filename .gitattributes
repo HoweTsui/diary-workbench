@@ -1,0 +1,3 @@
+# Preserve bundled upstream runtime, shaders and license text byte-for-byte.
+plugins/diary-workbench/skills/cartoon-diary-journal/assets/** -whitespace
+plugins/diary-workbench/workbench/app/default-library/runtime/fonts/** -whitespace

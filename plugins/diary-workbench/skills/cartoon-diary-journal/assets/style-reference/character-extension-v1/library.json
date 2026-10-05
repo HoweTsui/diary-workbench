@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "appearance-variants-v1",
+      "path": "appearance-variants.png",
+      "sha256": "4178ca06a612d7fbe7ec33b9fc369957e9e56f07b6c64192a862f1f5ed2e72a9",
+      "status": "user-selected-features",
+      "useFor": "mandatory component reference in every human generation: observable hair, clothing, accessories and appearance variation",
+      "notFor": "identity substitution, body proportions, overriding approved drawing grammar or copying a complete example identity"
+    },
+    {
+      "id": "age-proportions-v1",
+      "path": "age-proportions.png",
+      "sha256": "95dce83be8e63620ad9aaf55ff1174a402946b90b6623f9182ee63071eab8efb",
+      "status": "user-approved-proportions",
+      "useFor": "mandatory component reference in every human generation: relative age-stage height and head-to-body proportions, grounded in user information and the mapped identity image",
+      "notFor": "identity or age assignment, hairstyle, guessing actual age, or replacing canonical drawing grammar"
+    },
+    {
+      "id": "expression-draft-v2",
+      "path": "expression-draft-v2.png",
+      "sha256": "6c558d0a89d55ae150ebaff78e3b5efd11551a31df44ec352b33d181c047598d",
+      "status": "draft-preview",
+      "useFor": "expression previews only until user approval; round equal open-eye pupils, master-based face, low mouth",
+      "notFor": "automatic production attachment or changing identity"
+    },
+    {
+      "id": "age-variety-example-v2",
+      "path": "appearance-unified-v5.png",
+      "sha256": "a93def75d5f97d4235b4532dceb3d5c5717ff6c93db102f956d9dfa552e062ec",
+      "status": "user-approved-components",
+      "revision": "appearance-unified-v5",
+      "compatibilityNote": "Stable reference id retained; v5 further slims side-facing arms and legs on the original 12-character composition and was confirmed by the user. Previously approved v3 and the v4 draft remain preserved for comparison.",
+      "useFor": "mandatory component reference in every human generation by user instruction: open-ended face, age-presentation, body-type, hair and clothing examples with pure-white skin fill; select features individually",
+      "notFor": "copying any complete example character, treating the sheet as a fixed roster or age/identity assignment, overriding the approved master, or approving example characters"
+    },
+    {
+      "id": "limb-hand-foot-proportions-v1",
+      "path": "limb-hand-foot-proportions-v2.png",
+      "sha256": "56e0d15bc46d5776da3696166ad3c593f2ea2ac3820fe570a76f0caafb882de8",
+      "status": "user-approved-component-reference",
+      "useFor": "mandatory structural reference in every human generation: side-facing head and torso, near arm visible and far arm usually occluded, near/far legs staggered in depth, slim white-interior double-line stems; on the native 1536x1024 reference adult exposed arm outer width is about 24px and child about 21px, scaling proportionally in other canvases, with unchanged rounded hands and right-pointing oval shoes; constant black stroke weight and rounded endpoints",
+      "notFor": "front-facing symmetric limbs, redrawing character faces or identity, changing approved hands or shoes, copying a complete example figure, thick solid pant-leg columns, sharp tapered line ends, or replacing canonical geometry"
+    }
+  ],
+  "expressionVocabulary": [
+    {"id": "neutral", "eye_state": "neutral_dot", "eyebrows": "none", "mouth": "low small relaxed"},
+    {"id": "gentle-smile", "eye_state": "neutral_dot", "eyebrows": "none", "mouth": "low slight upward curve"},
+    {"id": "happy-laugh", "eye_state": "neutral_dot", "eyebrows": "none", "mouth": "low open smile"},
+    {"id": "surprise", "eye_state": "wide_round", "eyebrows": "none", "mouth": "low small open oval"},
+    {"id": "worry", "eye_state": "neutral_dot", "eyebrows": "none", "mouth": "low subdued downward curve"},
+    {"id": "sad", "eye_state": "closed_arc", "eyebrows": "none", "mouth": "low downward curve"},
+    {"id": "frustrated", "eye_state": "half_lid", "eyebrows": "none", "mouth": "low tense short line"},
+    {"id": "sleepy", "eye_state": "closed_arc", "eyebrows": "none", "mouth": "low relaxed line"}
+  ]
+}

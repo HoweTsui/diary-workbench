@@ -1,0 +1,20 @@
+{
+  "name": "diary-workbench",
+  "interface": {
+    "displayName": "日记工作台"
+  },
+  "plugins": [
+    {
+      "name": "diary-workbench",
+      "source": {
+        "source": "local",
+        "path": "./plugins/diary-workbench"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

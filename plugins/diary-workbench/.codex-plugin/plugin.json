@@ -1,0 +1,12 @@
+{
+  "name": "diary-workbench",
+  "version": "0.1.9",
+  "description": "本地日记工作台与原创黑白日记 Skill",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "日记工作台",
+    "shortDescription": "填写、生成、预览和归档日记",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"]
+  }
+}

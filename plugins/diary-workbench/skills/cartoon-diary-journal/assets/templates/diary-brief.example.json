@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "kind": "diary",
+  "protagonistId": "sample",
+  "identity": {
+    "status": "draft",
+    "version": "v1"
+  },
+  "characters": [
+    {
+      "id": "sample",
+      "name": "虚构角色",
+      "species": "human",
+      "anchors": [
+        "短发",
+        "白色上衣"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "path": "identity-draft.png",
+      "role": "identity-draft"
+    }
+  ],
+  "date": "2026-09-09",
+  "title": "借伞的小事",
+  "sourceText": "出门突然下雨，我借到一把伞，开心地向朋友挥手。",
+  "events": [
+    {
+      "scene": "一人拿着借来的伞，开心挥手",
+      "caption": "借伞真及时",
+      "characters": [
+        "sample"
+      ],
+      "emotion": "happy",
+      "intensity": "medium",
+      "eye_state": "closed_arc",
+      "eyebrows": "none",
+      "must_keep": [
+        "借来的伞",
+        "挥手"
+      ],
+      "flexible": [
+        "背景简化"
+      ]
+    }
+  ]
+}
