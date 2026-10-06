@@ -11,5 +11,5 @@ export function ProfileAvatar({ catalog }) {
     return <span className={`profile-avatar${cropped ? ' profile-avatar-cropped' : ''}`}><img src={profile.avatarSrc} style={style} alt={profile.name || '主角头像'} /></span>;
   }
   if (atlas) return <span className="profile-avatar profile-avatar-atlas"><img src={atlas.src} alt={profile.name || '主角头像'} style={{ width: `${atlas.cols * 260}%`, left: `${-80 - atlas.col * 260}%`, top: `${-10 - atlas.row * 280}%` }} /></span>;
-  return <span className="profile-avatar"><UserCircleIcon size={58} /></span>;
+  return <span className="profile-avatar"><UserCircleIcon size="100%" aria-hidden="true" focusable="false" /></span>;
 }

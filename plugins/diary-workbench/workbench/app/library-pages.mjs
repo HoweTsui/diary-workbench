@@ -60,8 +60,18 @@ body[data-workbench-library="graph"] .workbench-graph-filters .search { width:20
 body[data-workbench-library="graph"] .toolbar { position:absolute; z-index:4; inset:12px 16px auto; display:flex; flex-wrap:wrap; justify-content:flex-start; gap:8px; max-width:none; margin:0; min-width:0; }
 body[data-workbench-library="graph"] > .app { position:relative; isolation:isolate; flex:1; height:auto; min-height:0; --graph-tools-height:80px; }
 body[data-workbench-library="graph"] .inspector { min-height:0; overscroll-behavior:contain; }
+body[data-workbench-library="graph"] > .app:not(.inspector-open) { grid-template-columns:minmax(0,1fr); }
+body[data-workbench-library="graph"] > .app:not(.inspector-open) .inspector { display:none; }
+body[data-workbench-library="graph"] .toolbar .mobile-inspector { display:none; }
+body[data-workbench-library="graph"] > .app:not(.inspector-open) .toolbar .mobile-inspector { display:inline-flex; }
+body[data-workbench-library="graph"] > .app > .close-inspector { position:absolute; z-index:7; top:24px; left:calc(100% - clamp(330px,27vw,408px) - 30px); display:grid; place-items:center; width:30px; height:40px; padding:0; border:1.5px solid var(--ink); border-right:0; border-radius:8px 0 0 8px; background:var(--paper); box-shadow:-3px 3px 0 rgba(23,23,21,.12); cursor:pointer; font-size:22px; line-height:1; }
+body[data-workbench-library="graph"] > .app:not(.inspector-open) > .close-inspector { display:none; }
 @media(max-width:900px) {
-  body[data-workbench-library="graph"] .inspector { position:absolute; top:var(--graph-tools-height); right:0; bottom:0; }
+  body[data-workbench-library="graph"] > .app { display:grid; grid-template-columns:minmax(0,1fr) minmax(320px,min(42vw,408px)); }
+  body[data-workbench-library="graph"] > .app.inspector-open > .close-inspector { left:calc(100% - max(320px,min(42vw,408px)) - 30px); }
+  body[data-workbench-library="graph"] .graph-pane { width:auto; height:auto; min-height:0; }
+  body[data-workbench-library="graph"] .inspector { display:none; position:relative; inset:auto; width:auto; height:auto; transform:none; transition:none; border-left:2px solid var(--ink); box-shadow:none; }
+  body[data-workbench-library="graph"] .inspector.open { display:block; }
 }
 @media(max-width:800px) {
   body[data-workbench-library="graph"] > .topbar { grid-template-columns:auto minmax(0,1fr); }
@@ -72,7 +82,11 @@ body[data-workbench-library="graph"] .inspector { min-height:0; overscroll-behav
   body[data-workbench-library="graph"] > .topbar { padding:10px 12px; gap:8px; }
   body[data-workbench-library="graph"] .toolbar { right:12px; left:12px; gap:7px; }
   body[data-workbench-library="graph"] .toolbar .mobile-inspector { min-width:40px; width:40px; padding:0; gap:0; font-size:0; }
-  body[data-workbench-library="graph"] .inspector { padding:18px 18px 24px; }
+  body[data-workbench-library="graph"] > .app { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
+  body[data-workbench-library="graph"] > .app.inspector-open { grid-template-rows:minmax(240px,42dvh) minmax(0,1fr); }
+  body[data-workbench-library="graph"] > .app.inspector-open > .close-inspector { top:calc(42dvh - 20px); left:10px; border-right:1.5px solid var(--ink); border-radius:8px; }
+  body[data-workbench-library="graph"] .graph-pane { min-height:240px; border-right:0; }
+  body[data-workbench-library="graph"] .inspector { min-height:0; padding:18px 18px 24px; border:0; border-top:2px solid var(--ink); }
 }
 `;
 const graphAdapter = `<script data-workbench-integration>
@@ -84,14 +98,18 @@ const graphAdapter = `<script data-workbench-integration>
   const narrow = window.matchMedia('(max-width:900px)');
   toggle.setAttribute('aria-controls', 'inspector');
   toggle.setAttribute('aria-label', '人物卡');
+  if (!narrow.matches) inspector.classList.add('open');
   toggle.addEventListener('click', event => {
     inspector.classList.toggle('open');
     event.stopImmediatePropagation();
   }, true);
   function syncInspector() {
-    const open = !narrow.matches || inspector.classList.contains('open');
+    const open = inspector.classList.contains('open');
+    const wasOpen = pane.parentElement.classList.contains('inspector-open');
     inspector.inert = !open;
+    pane.parentElement.classList.toggle('inspector-open', open);
     toggle.setAttribute('aria-expanded', String(open));
+    if (wasOpen && !open) toggle.focus();
   }
   new MutationObserver(syncInspector).observe(inspector, { attributes:true, attributeFilter:['class'] });
   narrow.addEventListener('change', syncInspector);
@@ -107,7 +125,6 @@ const graphAdapter = `<script data-workbench-integration>
     const size = rect.width + ':' + rect.height;
     if (size !== lastSize) { lastSize = size; window.dispatchEvent(new Event('resize')); }
   }).observe(pane);
-  document.getElementById('close-inspector').addEventListener('click', () => toggle.focus());
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && narrow.matches && inspector.classList.contains('open') && !event.target.matches('input,textarea,select')) {
       inspector.classList.remove('open'); toggle.focus();
@@ -144,6 +161,21 @@ function individualAvatars(html) {
         } else if (hasAtlasCell && atlas.complete && atlas.naturalWidth) {`);
 }
 
+function fitGraphOnResize(html) {
+  const before = `        resetView(false);\n        draw();\n      }\n\n      function resetPositions()`;
+  const after = `        fitViewToPositions(new Map(nodes.map(function (node) { return [node.id, { x: node.x, y: node.y }]; })));\n        draw();\n      }\n\n      function resetPositions()`;
+  if (!html.includes(before)) throw new Error('人物图谱缩放入口未找到，不能适配面板宽度');
+  return html.replace(before, after);
+}
+
+function makeInspectorCollapsible(html) {
+  const before = '<button id="close-inspector" class="close-inspector" type="button" aria-label="关闭人物卡">×</button>';
+  const inspector = '<aside class="inspector" id="inspector" aria-label="人物卡">';
+  const handle = '<button id="close-inspector" class="close-inspector" type="button" aria-label="收起人物卡" title="收起人物卡">×</button>\n';
+  if (!html.includes(before) || !html.includes(inspector)) throw new Error('人物卡收起按钮未找到，不能应用工作台适配');
+  return html.replace(before, '').replace(inspector, handle + inspector);
+}
+
 export function adaptLibraryPage(html, kind) {
   if (!['book', 'graph'].includes(kind) || html.includes('data-workbench-library=')) return html;
   let adapted = html.replace('<body>', `<body data-workbench-library="${kind}">`);
@@ -154,7 +186,7 @@ export function adaptLibraryPage(html, kind) {
       .replace('<span>把日常，慢慢翻开。</span>', '');
     if (!adapted.includes('class="workbench-back"')) adapted = adapted.replace('<header class="book-toolbar">', `<header class="book-toolbar">${backLink}`);
   } else {
-    adapted = individualAvatars(adapted);
+    adapted = fitGraphOnResize(individualAvatars(makeInspectorCollapsible(adapted)));
     const topbar = adapted.match(/<header class="topbar">[\s\S]*?<\/header>/)?.[0];
     if (!topbar) throw new Error('人物图谱操作栏未找到，不能应用工作台适配');
     const toolbar = topbar.match(/<div class="toolbar"[^>]*>[\s\S]*?<\/div>/)?.[0];

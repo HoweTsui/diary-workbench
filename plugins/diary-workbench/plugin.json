@@ -1,20 +1,29 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "diary-workbench",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "repository": "https://github.com/HoweTsui/diary-workbench",
   "homepage": "https://github.com/HoweTsui/diary-workbench#readme",
   "description": "本地日记工作台：事件与照片填写、海报预览、日期归档、3D 日记本及人物关系图谱。",
   "license": "MIT",
-  "keywords": ["diary", "local-first", "workbench"],
+  "keywords": [
+    "diary",
+    "local-first",
+    "workbench"
+  ],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "日记工作台",
         "shortDescription": "在 Codex 右侧填写、预览与收藏日记",
         "category": "Productivity",
-        "capabilities": ["Read", "Write"],
-        "defaultPrompt": ["打开日记工作台"]
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "defaultPrompt": [
+          "打开日记工作台"
+        ]
       }
     }
   }

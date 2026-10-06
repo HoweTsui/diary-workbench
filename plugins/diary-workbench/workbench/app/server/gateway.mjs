@@ -100,20 +100,20 @@ export function diaryGateway({ demoRoot, readerRoot, root = localRoot, skill = s
               return json(200, await jobs.failChat(chat[1], body.threadId));
             }
           }
-          const match = /^\/api\/diary\/jobs\/([a-f0-9-]{36})(?:\/(poster|cards\/[^/]+|cancel|respond|confirm|retry))?$/.exec(pathname);
+          const match = /^\/api\/diary\/jobs\/([a-f0-9-]{36})(?:\/(poster|cards\/[^/]+|avatars\/[^/]+|cancel|respond|confirm|retry))?$/.exec(pathname);
           if (match) {
             const job = jobs.get(match[1]), action = match[2];
             if (req.method === 'GET' && !action) return json(200, jobs.public(job));
-            if (req.method === 'GET' && (action === 'poster' || action?.startsWith('cards/'))) {
+            if (req.method === 'GET' && (action === 'poster' || action?.startsWith('cards/') || action?.startsWith('avatars/'))) {
               if (!job.result) return json(404, { error: '真实海报尚未生成。' });
-              const relative = action === 'poster' ? job.result.poster : job.characters.find(c => c.id === decodeURIComponent(action.slice(6)))?.card;
+              const relative = action === 'poster' ? job.result.poster : job.characters.find(c => c.id === decodeURIComponent(action.split('/')[1]))?.[action.startsWith('avatars/') ? 'avatar' : 'card'];
               const file = await safeFile(path.join(jobs.folder(job), 'result'), relative);
               res.setHeader('Content-Type', mime[path.extname(file)] || 'application/octet-stream'); return res.end(await fs.readFile(file));
             }
             if (req.method === 'POST' && action === 'cancel') return json(200, await jobs.cancel(job.id));
             if (req.method === 'POST' && action === 'respond') { const body = await readBody(req); return json(200, await jobs.respond(job.id, body.pendingId, body)); }
             if (req.method === 'POST' && action === 'retry') { const body = await readBody(req); return json(202, await jobs.retry(job.id, body.inputKey, body.identitySources)); }
-            if (req.method === 'POST' && action === 'confirm') { const body = await readBody(req); return json(200, await jobs.confirm(job.id, body.inputKey, body.approvedCharacters)); }
+            if (req.method === 'POST' && action === 'confirm') { const body = await readBody(req); return json(200, await jobs.confirm(job.id, body.inputKey, body.approvedCharacters, body.relationships)); }
           }
           if (req.method === 'GET' && pathname.startsWith('/api/diary/library/notes/')) {
             const file = await safeFile(path.join(root, 'library/notes'), decodeURIComponent(pathname.slice('/api/diary/library/notes/'.length)));

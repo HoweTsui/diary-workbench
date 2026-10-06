@@ -513,15 +513,24 @@ def build_prompt(brief):
               'human nose, hair, hands or expression atlas. Keep each pet\'s own markings, ears, tail '
               'and body identity. Unrelated scenes and diary text remain unchanged in local composition.')
     purpose = (
-        "Create one identity draft card, NOT a turnaround or multi-angle sheet. "
-        "For EACH listed character draw exactly ONE complete half-side full-body figure "
-        "and ONE enlarged head detail in the SAME half-side orientation, never an additional full body. "
+        "Create one square 1:1 identity draft card with exactly ONE character, NOT a turnaround or multi-angle sheet. "
+        "Draw exactly ONE complete half-side full-body figure centered on the square canvas. "
+        "No enlarged face detail, duplicate head, extra depiction or inset. The head-to-shoulder avatar will be cropped locally from this exact full-body image. "
         "Head and body must follow the approved side-facing reference; humans keep both eyes visible. "
         "No front view, back view, alternative angles, repeated poses or extra characters from reference sheets. "
         "Source photos supply identity, not output camera angles. Correct old geometry while preserving "
         "broad identity features. No preexisting approved atlas required. Use neutral_dot and no eyebrows."
         if brief["kind"] == "onboarding" else "Create an expression/action test sheet from selected scenes."
     )
+    if brief['kind'] == 'onboarding' and len(brief['characters']) != 1:
+        raise ValueError('onboarding requires one character per square full-body card')
+    if brief['kind'] == 'onboarding' and not human_ids:
+        purpose = ('PET STYLE PRIORITY: the attached cat/dog component is the mandatory drawing grammar. '
+                   'Use a completely smooth continuous rounded silhouette on head, cheeks, chest, body and tail. '
+                   'ZERO fur spikes, ZERO jagged or scalloped hair edges, ZERO shaggy chest mane. '
+                   'Long-haired identity means a wider rounded silhouette, never drawn fur. '
+                   'Schnauzer beard means one simple smooth rounded muzzle outline, not hair strands or lobes. '
+                   'Pure BLACK outlines and WHITE opaque fill only, no colored markings or gray. ') + purpose
     bundled = [item for item in brief["references"] if item.get("origin") == "bundled"]
     fixed_pack = "\n".join(f"- {item.get('id')}: {item['path']} ({item['role']})" for item in bundled)
     style_library = load_library()
@@ -543,7 +552,7 @@ def build_prompt(brief):
                      'around a small necessary prop; no full rooms, panoramic counters, walls or floors filling a band. '
                      'Local composition fits complete scenes without cropping and adds paper rules and Yozai text. '
                      'Do not draw dates, titles, captions, bubbles, labels, letters, numbers or paper lines.')
-    return "\n".join([purpose, "Draft preview is not identity approval; never label it confirmed.", rules,
+    prompt = "\n".join([purpose, "Draft preview is not identity approval; never label it confirmed.", rules,
         "HARD IDENTITY AND STYLE LOCK (zero-tolerance acceptance): preserve each mapped character's recognizable visible features from that character's own uploaded source image or user-approved identity card, including face silhouette, hairline/hairstyle, glasses, age presentation, body type and clothing/accessory anchors. Do not transfer features between people. Use the approved master and every mandatory Reference image as binding, component-specific visual constraints. Recognizability MUST be expressed within that approved style: simplify nonessential hair strands, fur, fabric texture, photographic lighting and background detail; do not reproduce every photographic detail or a whole example character. Never simplify away identity anchors or introduce a visibly different face, age/body proportion, line language or expression. If any required anchor or expression is visibly wrong, the result fails review and must not be called complete. Compare and translate feature-by-feature.",
         "Identity translation: preserve observed face silhouette, hair, glasses, clothing and body shape from each person's own photo/card. Keep the round-face baseline, short non-drooping open nose with upper gap, equal ROUND dot eyes of equal diameter, modest eye spacing, outermost small ear. All open pupils are true circles, never ovals. Mouth stays visibly below and separate from the nose, in the lower face. No separate neck: visible jaw/clothing boundary, side-facing body, fine white double-line limbs; far arm hidden unless action exposes it. All skin and uninked clothing interiors are opaque pure white, without gray shading, gradients or texture. Fuller figures have a visible clothed belly curve. ageGroup and optional adult ageStage come only from user information, default unknown. Use age-proportions-v1 only for relative age/height; appearance-variants-v1 for observed hair/clothing/accessory variety; age-variety-example-v2 only as an open-ended face/age/body component reference, never as a roster, age assignment or complete identity; human-expression-reference-v6 for the corresponding emotion's eye/mouth design. The approved master always governs drawing language and geometry. Do not use expression-draft-v2. Children, adolescents and unknown ages have neutral loose tops. Only explicitly adult women may have a subtle clothed chest contour. Never infer age or add anatomical detail. For onboarding show full body AND face detail, no generated labels. Feature examples never substitute a user's identity.",
         "Reference roles: identity-source supplies the character's uploaded source appearance; identity-draft is provisional; identity-approved locks the user-confirmed identity, never obsolete drawing geometry. Current master defines drawing grammar. geometry.human is the regular baseline; use geometry.bodyProfiles[bodyType].torsoWidth for the specified body type, keeping limbs fine. neckWidth=0 means no separate neck, NOT missing head/body boundary. Scene references supply the mapped environment, key objects and spatial relationships; simplify details without replacing the location. An identity card without characterIds is an explicitly shared lineup: use only event characters. Attach every listed image and use each only for its declared duty.",
@@ -555,6 +564,11 @@ def build_prompt(brief):
         ("No text anywhere in style-lock illustration assets; all text is local composition." if 'styleLock' in brief else "Only header/title/caption/bubble/summary are renderable text; onboarding may label character names. All other metadata and scene descriptions are drawing instructions, never printed. No additional text."),
         "Use each character's own species dimensions and observable identity anchors. Preserve hairstyle, clothing and accessories from identity references. Take nose shape, upper contour gap, eye structure and body proportions from the current master and canonical geometry, correcting conflicting old-card geometry even during onboarding or preview. Geometry dimensions use head width H as the unit. Per-character expressions override event expression for that character; event expression applies only to characters without an override. Never spread one person's emotion to a pet with its own override. Selected eye_state overrides neutral expression only: open eye dots remain circular, lids only occlude them, closed eyes remain arcs. Temporary eyebrows require an explicitly authored strong exaggerated expression. Mouth length/shape follows the authored emotion at its low rear-side position.",
         json.dumps(render, ensure_ascii=False, indent=2)])
+    prompt = prompt.replace('For onboarding show full body AND face detail, no generated labels.',
+                            'For onboarding show exactly one complete full-body character on a square 1:1 canvas, no enlarged face detail, no generated labels.')
+    if brief['kind'] == 'onboarding':
+        prompt += '\nSQUARE FULL-BODY CARD: one character once, full head/hair/ears/feet/tail intact. Transparent exterior, opaque pure-white interiors, no glow or shadow. Center entire figure horizontally and vertically, about 10% transparent margin above and below. Never generate a separate face or bust.'
+    return prompt
 
 
 def generation_request(brief, scene=None, *, reference_dir=None, max_images=5, tile_edge=1200):

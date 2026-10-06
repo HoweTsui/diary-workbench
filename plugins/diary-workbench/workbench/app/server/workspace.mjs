@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { historyEvents } from './history-events.mjs';
+import { protagonist } from './character-catalog.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 export const validDate = date => /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(new Date(date).getTime()) && new Date(date).toISOString().slice(0, 10) === date;
@@ -153,8 +154,13 @@ export class DiaryWorkspace {
     return target.graph.nodes.map(node => ({ ...node,
       species: ['cat', '猫'].includes(node.species) ? 'cat' : node.kind === 'pet' || node.species === 'dog' ? 'dog' : 'human',
       sourceRoot: target.diaryRoot,
-      sourcePath: node.avatarSrc ? path.posix.join(graphRoot, decodeURIComponent(node.avatarSrc)) : target.graph.atlas?.src ? path.posix.join(graphRoot, decodeURIComponent(target.graph.atlas.src)) : null,
+      avatarSourcePath: node.profile?.avatar?.styleVersion === 'style-lock-v2' && node.avatarSrc ? path.posix.join(graphRoot, decodeURIComponent(node.avatarSrc)) : null,
+      sourcePath: node.profile?.standardCardSrc || node.avatarSrc ? path.posix.join(graphRoot, decodeURIComponent(node.profile?.standardCardSrc || node.avatarSrc)) : target.graph.atlas?.src ? path.posix.join(graphRoot, decodeURIComponent(target.graph.atlas.src)) : null,
       sourceDescription: node.avatarSrc ? '' : `既有人物图谱合图，${target.graph.atlas?.cols}列、${target.graph.atlas?.rows}行；本角色位于第${(node.row || 0) + 1}行、第${(node.col || 0) + 1}列。其他格子不是本角色。此图是旧身份来源，不代表已通过当前画风。`,
     }));
+  }
+  async characterGraph() {
+    const target = await this.target();
+    return target ? { ...target.graph, protagonistId: protagonist(target.graph.nodes, target.graph.protagonistId) } : null;
   }
 }

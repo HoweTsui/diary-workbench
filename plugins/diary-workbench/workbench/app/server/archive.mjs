@@ -5,8 +5,70 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { safeFile, sha256 } from './jobs.mjs';
+import { mergeRelationships } from './character-catalog.mjs';
 
 const execute = promisify(execFile);
+const confirmed = record => record?.profile?.identity?.status === 'confirmed';
+const normalizedAvatar = record => record?.avatarSrc && record.avatarSrc !== record.profile?.standardCardSrc && record.profile?.avatar?.styleVersion === 'style-lock-v2';
+const identityVersion = record => record?.profile?.identity?.version ?? record?.profile?.identity?.approvedVersion;
+
+export function archivedAvatarSrc(asset, previous) {
+  return asset.preserveAvatar && normalizedAvatar(previous) && identityVersion(previous) === identityVersion(asset.record) ? previous.avatarSrc : asset.avatarSrc;
+}
+
+// Read existing assets from their own carrier root; job assets are result-relative.
+export async function archiveCharacter(character, approval, source, carriers) {
+  const existing = carriers.find(c => confirmed(c.record)) || carriers.find(c => c.record);
+  const preserveAvatar = !character.requiresApproval;
+  if (character.requiresApproval && !approval.characters?.includes(character.id)) throw Error('角色尚未确认，不能归档。');
+  const savedCard = existing?.record.profile?.standardCardSrc;
+  const cardFile = confirmed(existing?.record) && !character.requiresApproval && savedCard ? await existing.read(savedCard) : character.card ? await safeFile(source, character.card) : preserveAvatar && savedCard ? await existing.read(savedCard) : null;
+  if (!cardFile) throw Error('角色缺少标准身份卡，不能归档。');
+  const portrait = preserveAvatar && carriers.find(c => normalizedAvatar(c.record) && identityVersion(c.record) === identityVersion(existing?.record));
+  const legacy = preserveAvatar && carriers.find(c => c.record?.avatarSrc && c.record.avatarSrc !== c.record.profile?.standardCardSrc && identityVersion(c.record) === identityVersion(existing?.record));
+  const avatarFile = portrait ? await portrait.read(portrait.record.avatarSrc) : character.avatar ? await safeFile(source, character.avatar) : legacy ? await legacy.read(legacy.record.avatarSrc) : null;
+  if (!avatarFile) throw Error('新增或更新身份缺少独立头像，不能把身份卡当作头像。');
+  const cardBytes = await fs.readFile(cardFile), avatarBytes = await fs.readFile(avatarFile);
+  if (character.avatar && !portrait && sha256(cardBytes) === sha256(avatarBytes)) throw Error('不能把身份卡当作头像。');
+  const crop = !portrait && character.avatarCrop ? JSON.parse(await fs.readFile(await safeFile(source, character.avatarCrop), 'utf8')) : undefined;
+  const assetId = encodeURIComponent(character.id);
+  const cardSrc = `identity-cards/${assetId}-${sha256(cardBytes)}${path.extname(cardFile)}`;
+  const avatarSrc = `avatars/${assetId}-${sha256(avatarBytes)}${path.extname(avatarFile)}`;
+  const base = existing?.record || {};
+  const profile = { ...base.profile, approval: 'approved', standardCardSrc: cardSrc,
+    identity: confirmed(base) && !character.requiresApproval ? base.profile.identity : { status: 'confirmed', version: character.version, approvedVersion: character.version, approvedBy: approval.by, styleVersion: 'style-lock-v2', approvedAt: approval.at },
+    ...(portrait || character.avatar ? { avatar: { ...(portrait ? portrait.record.profile?.avatar : {}), styleVersion: 'style-lock-v2', ...(crop ? { crop } : {}) } } : {}) };
+  return { record: { ...base, id: character.id, name: character.name, species: character.species, anchors: character.anchors, ...(character.role !== undefined ? { role: character.role } : {}), avatarSrc, profile }, preserveAvatar, cardSrc, cardBytes, avatarSrc, avatarBytes };
+}
+
+export function syncArchiveRelationships(graph, approval, protagonistId, ...books) {
+  let changed = mergeRelationships(graph, approval, protagonistId);
+  if (protagonistId) {
+    changed = graph.protagonistId !== protagonistId || changed;
+    graph.protagonistId = protagonistId;
+  }
+  for (const book of books) {
+    if (protagonistId) book.protagonistId = protagonistId;
+    const relationships = [];
+    for (const edge of [...(book.relationships || []), ...(graph.edges || [])]) {
+      if (!relationships.some(e => e.label === edge.label && ((e.source === edge.source && e.target === edge.target) || (e.source === edge.target && e.target === edge.source)))) relationships.push(structuredClone(edge));
+    }
+    book.relationships = relationships;
+    for (const character of book.characters) {
+      const relation = graph.nodes.find(n => n.id === character.id)?.profile?.relationshipToProtagonist;
+      if (relation) character.profile = { ...character.profile, relationshipToProtagonist: structuredClone(relation) };
+    }
+  }
+  return changed;
+}
+
+export async function writeCharacterAssets(root, asset, previous) {
+  for (const [relative, bytes] of [[asset.cardSrc, asset.cardBytes], [asset.avatarSrc, asset.avatarBytes]]) {
+    await fs.mkdir(path.dirname(path.join(root, relative)), { recursive: true });
+    await fs.writeFile(path.join(root, relative), bytes);
+  }
+  return { ...asset.record, avatarSrc: archivedAvatarSrc(asset, previous), profile: structuredClone(asset.record.profile) };
+}
 export function replaceData(html, id, data) {
   const pattern = new RegExp(`(<script\\b[^>]*\\bid=["']${id}["'][^>]*>)([\\s\\S]*?)(<\\/script\\s*>)`, 'gi');
   if ([...html.matchAll(pattern)].length !== 1) throw Error(`载体中的 ${id} 数据块不唯一，未替换外壳。`);
@@ -52,24 +114,29 @@ export function createArchive({ root, demoRoot, readerRoot, skill, python }) {
     const graphMatch = graphHtml.match(/<script\b[^>]*\bid=["']graph-data["'][^>]*>([\s\S]*?)<\/script\s*>/i);
     if (!graphMatch) throw Error('原图谱缺少数据块。');
     const graph = JSON.parse(graphMatch[1]);
+    const previousReader = JSON.parse(await fs.readFile(path.join(staged, 'reader/data/manifest.json'), 'utf8'));
     let graphChanged = false;
+    const assets = new Map();
     for (const character of job.characters) {
       const known = data.characters.find(c => c.id === character.id), node = graph.nodes.find(c => c.id === character.id);
-      const card = await safeFile(source, character.card), cardSrc = `avatars/${character.id}-${sha256(await fs.readFile(card))}${path.extname(card)}`;
-      const approvedProfile = { ...(known?.profile || {}), approval: 'approved', identity: { status: 'confirmed', version: character.version, approvedVersion: character.version, approvedBy: 'user', styleVersion: 'style-lock-v2', approvedAt: job.approval.at } };
-      // Do not replace an existing portrait: only the explicitly approved new identity version changes it.
-      if (!known || known.profile?.identity?.status !== 'confirmed' || known.profile?.identity?.approvedBy !== 'user' || known.profile?.identity?.version !== character.version) {
-        await fs.mkdir(path.join(diary, 'avatars'), { recursive: true }); await fs.copyFile(card, path.join(diary, cardSrc));
-        const next = { ...known, id: character.id, name: character.name, species: character.species, anchors: character.anchors, avatarSrc: cardSrc, profile: approvedProfile };
-        if (known) Object.assign(known, next); else data.characters.push(next);
-        if (node) Object.assign(node, next); else graph.nodes.push({ x: 0, y: 0, ...next });
-        graphChanged = true;
-      }
+      const asset = await archiveCharacter(character, job.approval, source, [
+        ...[node, known].map(record => ({ record, read: relative => safeFile(diary, decodeURIComponent(relative)) })),
+        { record: previousReader.characters.find(c => c.id === character.id), read: relative => safeFile(path.join(staged, 'reader/data'), decodeURIComponent(relative)) },
+      ]);
+      assets.set(character.id, asset);
+      const next = await writeCharacterAssets(diary, asset, known);
+      if (known) Object.assign(known, next); else data.characters.push(next);
+      const graphNode = { ...next, avatarSrc: archivedAvatarSrc(asset, node) };
+      if (node) Object.assign(node, graphNode); else graph.nodes.push({ x: 0, y: 0, ...graphNode });
+      graphChanged = true;
     }
-    // No relationship is inferred from sharing a poster; established graph edges remain intact.
+    graphChanged = syncArchiveRelationships(graph, job.approval, job.protagonistId, data) || graphChanged;
     await fs.writeFile(manifestFile, JSON.stringify(data, null, 2));
     const bookFile = path.join(diary, 'index.html'); await fs.writeFile(bookFile, replaceData(await fs.readFile(bookFile, 'utf8'), 'diary-book-data', data));
-    if (graphChanged) await fs.writeFile(graphFile, replaceData(graphHtml, 'graph-data', graph));
+    if (graphChanged) {
+      await fs.writeFile(graphFile, replaceData(graphHtml, 'graph-data', graph));
+      await fs.writeFile(path.join(diary, 'character-graph-data.json'), JSON.stringify(graph, null, 2));
+    }
     const input = JSON.parse(await fs.readFile(path.join(jobFolder, 'input.json'), 'utf8'));
     const documentInput = path.join(staged, 'document-input.json');
     await fs.writeFile(documentInput, JSON.stringify({ date: job.date, sourceText: brief.sourceText, body: input.events.map(e => e.text).filter(text => text.trim()).join('\n\n') || '这一天的图片记录。', title: brief.title, events: brief.events, poster, photoArchive: photos }));
@@ -82,13 +149,10 @@ export function createArchive({ root, demoRoot, readerRoot, skill, python }) {
     for (const character of job.characters) {
       const approved = data.characters.find(c => c.id === character.id), readerCharacter = readerData.characters.find(c => c.id === character.id);
       if (!readerCharacter) throw Error('3D 日记本缺少本次已确认角色。');
-      const identity = readerCharacter.profile?.identity;
-      if (identity?.status === 'confirmed' && identity.approvedBy === 'user' && identity.version === approved.profile.identity.version) continue;
-      const card = await safeFile(diary, approved.avatarSrc), relative = `updates/${job.date}/${sha256(await fs.readFile(card))}${path.extname(card)}`;
-      await fs.mkdir(path.dirname(path.join(staged, 'reader/data', relative)), { recursive: true });
-      await fs.copyFile(card, path.join(staged, 'reader/data', relative));
-      Object.assign(readerCharacter, approved, { avatarSrc: relative });
+      const next = await writeCharacterAssets(path.join(staged, 'reader/data'), assets.get(character.id), previousReader.characters.find(c => c.id === character.id));
+      Object.assign(readerCharacter, approved, { avatarSrc: next.avatarSrc, profile: next.profile });
     }
+    syncArchiveRelationships(graph, { ...job.approval, relationships: [] }, job.protagonistId, readerData);
     await fs.writeFile(path.join(staged, 'reader/data/manifest.json'), JSON.stringify(readerData, null, 2));
     const readerEntry = readerData.entries.filter(e => e.date === job.date && !e.isBlank);
     if (readerEntry.length !== 1) throw Error('3D 日记本未得到唯一的对应日期。');

@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { safeFile, sha256 } from './jobs.mjs';
-import { replaceData } from './archive.mjs';
+import { replaceData, archiveCharacter, archivedAvatarSrc, writeCharacterAssets, syncArchiveRelationships } from './archive.mjs';
 import { jsonText, insideFile } from './workspace.mjs';
 
 const execute = promisify(execFile);
@@ -104,37 +104,27 @@ export function createVaultArchive({ root, workspace, skill, python }) {
     const entry = { ...old, id: old?.id || job.date, date: job.date, periodId, title: brief.title, posterSrc: media, body: originalText, summary: brief.summary || '', characterIds: characters.map(c => c.id), eventCount: brief.events.length, illustrationCount: brief.events.length, isBlank: false, approval: 'approved' };
     book.entries = [...book.entries.filter(e => e.date !== job.date), entry].sort((a, b) => a.date.localeCompare(b.date));
     let graphChanged = false;
+    const assets = new Map();
     for (const character of characters) {
       const node = graph.nodes.find(n => n.id === character.id), known = book.characters.find(c => c.id === character.id);
-      const same = node?.profile?.identity?.status === 'confirmed' && node.profile.identity.approvedVersion === character.version && !character.requiresApproval;
-      let updated;
-      if (same) {
-        updated = { ...node, avatarSrc: known?.avatarSrc || '' };
-        if (!updated.avatarSrc) {
-          const source = await insideFile(target.diaryRoot, path.posix.join(path.posix.dirname(target.relative.graph), decodeURIComponent(node.avatarSrc)));
-          const bytes = await fs.readFile(source), avatar = `avatars/${character.id}-${sha256(bytes)}${path.extname(source)}`;
-          updated.avatarSrc = avatar;
-          await fs.mkdir(path.join(regularSource, 'avatars'), { recursive: true });
-          await fs.writeFile(path.join(regularSource, avatar), bytes);
-          await add(path.posix.join(target.relative.regular, avatar), bytes, true);
-        }
+      const graphRoot = path.posix.dirname(target.relative.graph);
+      const asset = await archiveCharacter(character, job.approval, result, [
+        { record: node, read: relative => insideFile(target.diaryRoot, path.posix.join(graphRoot, decodeURIComponent(relative))) },
+        { record: known, read: relative => safeFile(path.dirname(target.bookFile), decodeURIComponent(relative)) },
+        { record: target.reader.characters.find(c => c.id === character.id), read: relative => safeFile(path.join(target.diaryRoot, target.relative.reader, 'data'), decodeURIComponent(relative)) },
+      ]);
+      assets.set(character.id, asset);
+      const updated = await writeCharacterAssets(regularSource, asset, known);
+      for (const root of [target.relative.regular, graphRoot]) {
+        await add(path.posix.join(root, asset.avatarSrc), asset.avatarBytes, true);
+        await add(path.posix.join(root, asset.cardSrc), asset.cardBytes, true);
       }
-      else {
-        if (character.requiresApproval && !job.approval.characters.includes(character.id)) throw Error('角色尚未确认，不能归档。');
-        const card = await safeFile(result, character.card), bytes = await fs.readFile(card), cardName = `${character.id}-${sha256(bytes)}${path.extname(card)}`;
-        const avatar = `avatars/${cardName}`;
-        await fs.mkdir(path.join(regularSource, 'avatars'), { recursive: true }); await fs.writeFile(path.join(regularSource, avatar), bytes);
-        await add(path.posix.join(target.relative.regular, avatar), bytes, true);
-        const graphAvatar = `avatars/${cardName}`;
-        await add(path.posix.join(path.posix.dirname(target.relative.graph), graphAvatar), bytes, true);
-        const profile = { ...node?.profile, identity: { status: 'confirmed', version: character.version, approvedVersion: character.version, styleVersion: 'style-lock-v2', approvedBy: job.approval.by, approvedAt: job.approval.at } };
-        updated = { ...known, id: character.id, name: character.name, species: character.species, anchors: character.anchors, avatarSrc: avatar, profile };
-        const graphNode = { ...node, ...updated, avatarSrc: graphAvatar, x: node?.x ?? 180 + graph.nodes.length * 120, y: node?.y ?? 280, col: -1, row: -1 };
-        if (node) Object.assign(node, graphNode); else graph.nodes.push(graphNode);
-        graphChanged = true;
-      }
+      const graphNode = { ...node, ...asset.record, avatarSrc: archivedAvatarSrc(asset, node), profile: structuredClone(asset.record.profile), x: node?.x ?? 180 + graph.nodes.length * 120, y: node?.y ?? 280 };
+      if (node) Object.assign(node, graphNode); else graph.nodes.push(graphNode);
       if (known) Object.assign(known, updated); else book.characters.push(updated);
+      graphChanged = true;
     }
+    graphChanged = syncArchiveRelationships(graph, job.approval, job.protagonistId, book) || graphChanged;
     // Already-confirmed book identities may have existing media outside staging;
     // only new identities and this date's media are read by the canonical updater.
     const stageBookHtml = path.join(regularSource, 'index.html');
@@ -154,12 +144,11 @@ export function createVaultArchive({ root, workspace, skill, python }) {
     reader.entries = [...target.reader.entries.filter(e => e.date !== job.date), readerEntry].sort((a, b) => a.date.localeCompare(b.date));
     for (const character of characters) {
       const approved = book.characters.find(c => c.id === character.id), existing = reader.characters.find(c => c.id === character.id);
-      if (character.requiresApproval || !existing?.profile?.identity) {
-        const card = await safeFile(result, character.card), bytes = await fs.readFile(card), relative = `updates/${job.date}/${sha256(bytes)}${path.extname(card)}`;
-        await fs.mkdir(path.dirname(path.join(stageReader, 'data', relative)), { recursive: true }); await fs.writeFile(path.join(stageReader, 'data', relative), bytes);
-        Object.assign(existing, approved, { avatarSrc: relative });
-      }
+      if (!existing) throw Error('3D 日记本缺少本次已确认角色。');
+      const next = await writeCharacterAssets(path.join(stageReader, 'data'), assets.get(character.id), target.reader.characters.find(c => c.id === character.id));
+      Object.assign(existing, approved, { avatarSrc: next.avatarSrc, profile: next.profile });
     }
+    syncArchiveRelationships(graph, { ...job.approval, relationships: [] }, job.protagonistId, reader);
     for (const file of await filesBelow(path.join(stageReader, 'data'))) if (path.basename(file) !== 'manifest.json') await add(path.posix.join(target.relative.reader, 'data', path.relative(path.join(stageReader, 'data'), file).split(path.sep).join('/')), await fs.readFile(file), true);
     await add(path.posix.join(target.relative.regular, 'index.html'), Buffer.from(replaceData(target.bookHtml, 'diary-book-data', book)));
     await add(path.posix.join(target.relative.regular, 'diary-book-data.json'), Buffer.from(jsonText(book)));
